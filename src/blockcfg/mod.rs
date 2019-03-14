@@ -23,7 +23,8 @@ pub trait BlockConfig {
     type Block: Block<Id = Self::BlockHash, Date = Self::BlockDate>
         + HasTransaction<Transaction = Self::Transaction>
         + HasHeader<Header = Self::BlockHeader>
-        + Send;
+        + Send
+        + Sync;
     type BlockDate: BlockDate + Display + FromStr;
     type BlockHash: BlockId + Display + Send;
     type BlockHeader: Header<Id = Self::BlockHash, Date = Self::BlockDate>

@@ -5,7 +5,7 @@ mod server;
 use super::NetworkBlockConfig;
 use crate::{blockchain::BlockchainR, settings::start::network::Peer};
 
-pub use self::client::run_connect_socket;
+pub use self::client::{run_connect_socket, Client};
 pub use self::server::run_listen_socket;
 
 use bytes::Bytes;

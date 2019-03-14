@@ -5,22 +5,29 @@
 //! transactions...);
 //!
 
+mod connections;
 mod grpc;
 // TODO: to be ported
 //mod ntt;
 pub mod p2p_topology;
 mod service;
 
+use self::{
+    connections::Connections,
+    p2p_topology::{self as p2p, P2pTopology},
+};
 use crate::blockcfg::BlockConfig;
 use crate::blockchain::BlockchainR;
 use crate::intercom::{BlockMsg, ClientMsg, TransactionMsg};
 use crate::settings::start::network::{Configuration, Listen, Peer, Protocol};
 use crate::utils::task::TaskMessageBox;
 
-use self::p2p_topology::{self as p2p, P2pTopology};
 use chain_core::property;
 use futures::prelude::*;
-use futures::stream::{self, Stream};
+use futures::{
+    future,
+    stream::{self, Stream},
+};
 
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
@@ -33,6 +40,7 @@ pub trait NetworkBlockConfig:
         Header = <Self as BlockConfig>::BlockHeader,
         BlockId = <Self as BlockConfig>::BlockHash,
         BlockDate = <Self as BlockConfig>::BlockDate,
+        Gossip = <Self as BlockConfig>::Gossip,
     >
 {
 }
@@ -44,6 +52,7 @@ impl<B> NetworkBlockConfig for B where
             Header = <Self as BlockConfig>::BlockHeader,
             BlockId = <Self as BlockConfig>::BlockHash,
             BlockDate = <Self as BlockConfig>::BlockDate,
+            Gossip = <Self as BlockConfig>::Gossip,
         >
 {
 }
@@ -65,14 +74,15 @@ impl<B: BlockConfig> Clone for Channels<B> {
     }
 }
 
-pub struct GlobalState<B: BlockConfig> {
+pub struct GlobalState<B: NetworkBlockConfig> {
     pub config: Arc<Configuration>,
     pub channels: Channels<B>,
     pub topology: P2pTopology,
     pub node: p2p::Node,
+    pub connections: Connections<B>,
 }
 
-impl<B: BlockConfig> GlobalState<B> {
+impl<B: NetworkBlockConfig> GlobalState<B> {
     /// the network global state
     pub fn new(config: &Configuration, channels: Channels<B>) -> Self {
         let node_id = p2p_topology::Id::generate(&mut rand::thread_rng());
@@ -96,17 +106,19 @@ impl<B: BlockConfig> GlobalState<B> {
             channels: channels,
             topology: p2p_topology,
             node,
+            connections: Default::default(),
         }
     }
 }
 
-impl<B: BlockConfig> Clone for GlobalState<B> {
+impl<B: NetworkBlockConfig> Clone for GlobalState<B> {
     fn clone(&self) -> Self {
         GlobalState {
             config: self.config.clone(),
             channels: self.channels.clone(),
             topology: self.topology.clone(),
             node: self.node.clone(),
+            connections: self.connections.clone(),
         }
     }
 }
@@ -145,7 +157,7 @@ impl<B: BlockConfig> Clone for ConnectionState<B> {
     }
 }
 
-impl<B: BlockConfig> ConnectionState<B> {
+impl<B: NetworkBlockConfig> ConnectionState<B> {
     fn new_listen(global: &GlobalState<B>, listen: &Listen) -> Self {
         ConnectionState {
             global_network_configuration: global.config.clone(),
@@ -205,7 +217,11 @@ where
         .collect::<Vec<_>>();
     let connections = stream::iter_ok(addrs).for_each(move |addr| {
         let peer = Peer::new(addr, Protocol::Grpc);
-        grpc::run_connect_socket(peer, state_connection.clone())
+        let connections = state_connection.connections;
+        grpc::run_connect_socket(peer, state_connection.clone()).and_then(|client| {
+            connections.add_connection(addr, client);
+            future::ok(())
+        })
     });
 
     tokio::run(connections.join(listener).map(|_| ()));
