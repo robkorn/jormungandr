@@ -125,8 +125,6 @@ pub struct ConnectionState<B: BlockConfig> {
     /// the local (to the task) connection details
     pub connection: Connection,
 
-    pub connected: Option<Connection>,
-
     /// Network topology reference.
     pub topology: P2pTopology,
 
@@ -141,7 +139,6 @@ impl<B: BlockConfig> Clone for ConnectionState<B> {
             channels: self.channels.clone(),
             timeout: self.timeout,
             connection: self.connection.clone(),
-            connected: self.connected.clone(),
             node: self.node.clone(),
             topology: self.topology.clone(),
         }
@@ -155,7 +152,6 @@ impl<B: BlockConfig> ConnectionState<B> {
             channels: global.channels.clone(),
             timeout: listen.timeout,
             connection: listen.connection,
-            connected: None,
             node: global.node.clone(),
             topology: global.topology.clone(),
         }
@@ -167,14 +163,9 @@ impl<B: BlockConfig> ConnectionState<B> {
             channels: global.channels.clone(),
             timeout: peer.timeout,
             connection: peer.connection,
-            connected: None,
             node: global.node.clone(),
             topology: global.topology.clone(),
         }
-    }
-    fn connected(mut self, connection: Connection) -> Self {
-        self.connected = Some(connection);
-        self
     }
 }
 
