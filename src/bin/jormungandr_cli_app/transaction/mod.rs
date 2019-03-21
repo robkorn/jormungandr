@@ -6,7 +6,7 @@ use structopt::StructOpt;
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub enum Transaction {
-    /// Build transaction
+    /// Build signed transaction binary blob and write it to stdout
     Build(build::Build),
 }
 
